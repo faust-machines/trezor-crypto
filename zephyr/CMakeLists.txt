@@ -1,0 +1,6 @@
+if(CONFIG_TREZOR)
+  add_subdirectory(.. build)
+  set_property(GLOBAL APPEND PROPERTY ZEPHYR_INTERFACE_LIBS trezor)
+  #zephyr_include_directories(../include)
+  #zephyr_interface_library_named(trezor-firmware)
+endif()

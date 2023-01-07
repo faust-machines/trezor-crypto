@@ -1,0 +1,382 @@
+* Zephyr Module example and template
+
+This is a sample and template code for Zephyr's module system.  This
+repository's aim is to support developers who want to integrate an
+existing code as a Zephyr module.
+
+For anyone want to work with Zephyr modules, please read [[https://docs.zephyrproject.org/latest/guides/modules.html][the official
+document]] first.
+
+* Given
+
+  - This repository have a sample library, libsample, which we want to
+    integrate to Zephyr as a module.
+
+  - An application using this sample is in [[https://github.com/yashi/module-app][a separate repository]].
+
+  - libsample has two functions
+    - sample_pure() does not use any Zephyr facility at all.  It does
+      its own calculation and return. If this is the case for all
+      functions in your code, it's simple.
+    - sample_zephyr() uses Zephyr facility and you need to take care a
+      few more bits.
+
+  - libsample is bulidable for both Linux and Zephyr and we want to
+    target both native_posix and qemu_cortex_m3.
+
+  - The build system for this repository is CMake.  A Zephyr module
+    must have a working CMake build script.  If code is based on Meson,
+    GNU Make, or any other build system, you must first port to CMake.
+
+  - We use the [[https://docs.zephyrproject.org/latest/guides/west/workspaces.html#t2-star-topology-application-is-the-manifest-repository][T2 Star topology]] for our workspace.
+
+* Setup West workspace
+
+  As noted, we are using T2 star topology.  Run the following commands
+  to setup a workspace.  This assume you have [[https://pipenv.pypa.io/en/latest/][Pipenv]].
+
+  #+begin_example
+    mkdir module-workspace
+    cd module-workspace
+    pipenv shell
+    pip3 install west
+    west init -m https://github.com/yashi/module-app
+    west update --narrow
+    pip3 install -r zephyr/scripts/requirements-base.txt
+  #+end_example
+
+  Once this is done, you can test build the application with the
+  following command:
+
+  #+begin_example
+    west build -b native_posix_64 module-app -t run
+  #+end_example
+
+  You need to =C-c= to kill the application.
+
+  If you don't know about West workspace, please read the [[https://docs.zephyrproject.org/latest/guides/west/basics.html][Basic]] and the
+  [[https://docs.zephyrproject.org/latest/guides/west/workspaces.html][Workspaces]].
+
+* Build as Zephyr module
+
+  At first, you should make libsample bulidable by the Zephyr's build
+  system.  You need to tell the build system libsample as a module,
+  and tell how to build it.
+
+  This allows us to test building the library with your target
+  compilers.
+
+** Add as a module
+
+To do so, you must add an entry about the library in the application's
+=west.yml=.
+
+#+begin_src yaml
+  - name: module-sample
+    url: https://github.com/yashi/module-sample
+    revision: main
+    path: modules/lib/sample
+#+end_src
+
+With this entry, West can now list module-sample as a module.  You can
+check it with =west list=.
+
+#+begin_example
+  $ west list
+  manifest     module-app                   HEAD                                     N/A
+  zephyr       zephyr                       main                                     https://github.com/zephyrproject-rtos/zephyr
+  cmsis        modules/hal/cmsis            b0612c97c1401feeb4160add6462c3627fe90fc7 https://github.com/zephyrproject-rtos/cmsis
+  module-sample modules/lib/sample           main                                     https://github.com/yashi/module-sample
+#+end_example
+
+West now recognize it as a module but it doesn't build it at all
+because it's not told to do so.
+
+Zephyr's build system will load module's =CMakeLists.txt=, which is
+=zephyr/CMakeLists.txt= as the default.  Please note that the build
+system will search for =zephyr/= directroy in a module directory.  This
+is a fixed location and hard coded in =zephyr/scripts/zephyr_module.py=.
+
+You can, on the other hand, change the location of the
+=zephyr/CMakeLists.txt=.  We'll talk about this in a later section.
+
+** Tell the build system to build
+
+If you just want to _bulid_ the library, add the following line in the
+=zephyr/CMakeLists.txt=.
+
+#+begin_src cmake
+  add_subdirectory(.. build)
+#+end_src
+
+This tells the build system
+
+  - To add the the library's root directory (because we are in =zephyr/=
+    directory) as a sub directory to build.
+  - A =binary_dir=. Because =..= is not a sub directory of the current
+    directory =zephyr/=, CMake will complain if you omit the second
+    binary directory parameter.  So this =build= parameter must be set.
+    The name of the binary directory doesn't have to be =build= but can
+    be of your choise.  If you omit it you get:
+    #+begin_example
+      CMake Error at .../module-workspace/modules/lib/sample/zephyr/CMakeLists.txt:1 (add_subdirectory):
+	add_subdirectory not given a binary directory but the given source
+	directory ".../module-workspace/modules/lib/sample" is not a
+	subdirectory of	".../module-workspace/modules/lib/sample/zephyr".  When
+	specifying an out-of-tree source a binary directory must be explicitly
+	specified.
+    #+end_example
+
+With this line, you see that libsample is built when you build your
+application.  You see the number of the build steps increased.
+
+#+begin_example
+  $ west build -b native_posix_64 module-app
+    :
+  [95/95] Linking C executable zephyr/zephyr.elf
+#+end_example
+
+#+begin_example
+  $ west build -b native_posix_64 module-app
+    :
+  [97/97] Linking C executable zephyr/zephyr.elf
+#+end_example
+
+** Conditional compilation whth Kconfig
+
+We just built libsample using the Zephyr build system but we want to
+control when to build it or not just like any other features in Zephyr.
+To do so, we'll use =if(CONFIG_LIBSAMPLE)= and =Kconfig= constructs.
+
+The default location of =Kconfig= is =zephyr/Kconfig= under a module
+directory.  You can change the location of =Kconfig= as well as
+=CMakeLists.txt=. This will be discussed in the later section.
+
+#+begin_src cmake
+  if(CONFIG_LIBSAMPLE)
+    add_subdirectory(.. build)
+  endif()
+#+end_src
+
+#+begin_src kconfig
+  config LIBSAMPLE
+	  bool "Enable libsample"
+	  help
+	    This option enables the libsample as a Zephyr module.
+#+end_src
+
+With these changes, libsample will show up in the menuconfig, you can
+build it with =-DCONFIG_LIBSAMPLE=y=, or you can control the build with
+=prj.conf= as usual.
+
+#+begin_example
+  Modules  --->
+
+    ,*** Available modules. ***
+    sample (.../module-workspace/modules/lib/sample)  --->
+
+      [ ] Enable libsample
+#+end_example
+
+#+begin_example
+  $ west build -b native_posix_64 module-app -- -DCONFIG_LIBSAMPLE=y
+#+end_example
+
+#+begin_src conf
+  CONFIG_LIBSAMPLE=y
+#+end_src
+
+** Build it with your target compilers
+
+   Now we can test buliding libsample with your target board and
+   target compilers.  We'll use =qemu_cortex_m3= and =native_posix_64=
+   as examples, but you should make sure your library is built by your
+   configuraiton.
+
+   To see how the library is built, you should use =-v= option to
+   =west= command.
+
+   #+begin_example
+     $ west -v build -b native_posix_64 module-app -- -DCONFIG_LIBSAMPLE=y
+       :
+     [2/135] ccache .../zephyr-sdk-0.13.1/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc  -I.../module-workspace/modules/lib/sample/include -Wall -Wextra -std=gnu11 -MD -MT modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj -MF modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj.d -o modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj -c .../module-workspace/modules/lib/sample/src/plain.c
+     [3/135] : && ccache /usr/bin/cmake -E rm -f modules/sample/build/libsample.a && ccache .../zephyr-sdk-0.13.1/arm-zephyr-eabi/bin/arm-zephyr-eabi-ar qc modules/sample/build/libsample.a  modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj && ccache .../zephyr-sdk-0.13.1/arm-zephyr-eabi/bin/arm-zephyr-eabi-ranlib modules/sample/build/libsample.a && :
+   #+end_example
+
+   #+begin_example
+     $ west -v build -b native_posix_64 module-app -- -DCONFIG_LIBSAMPLE=y
+     [1/97] ccache /usr/lib/ccache/gcc  -I.../module-workspace/modules/lib/sample/include -Wall -Wextra -std=gnu11 -MD -MT modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj -MF modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj.d -o modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj -c .../module-workspace/modules/lib/sample/src/plain.c
+     [2/97] cd .../module-workspace/build/zephyr && /usr/bin/cmake -E echo
+
+     [3/97] : && ccache /usr/bin/cmake -E rm -f modules/sample/build/libsample.a && ccache /usr/bin/ar qc modules/sample/build/libsample.a  modules/sample/build/CMakeFiles/sample.dir/src/plain.c.obj && ccache /usr/bin/ranlib modules/sample/build/libsample.a && :
+
+   #+end_example
+
+   An experienced user might notice that the built timing is way too
+   early, before the essential builds in the build system.  This will
+   be a problem if your library depends on Zephyr proper.  We'll cover
+   that later.
+
+   Make sure your library is built with compiler options you want to
+   use.  You should also make sure that your library is _not_ using
+   any compiler options and flags a Zephyr application would normally
+   built with.  This is because we haven't tell to do so.  If your
+   library doesn't depend on Zephyr, you don't need any compiler
+   option from Zephyr.  If it uses and depends on Zephyr, that is your
+   library uses Zephyr semaphore or logging subsystem, you must tell
+   additional flags while building your library.  We'll cover this
+   later.
+
+* Header-only library
+
+  A header-only library is a rare but does exists.  If you want to
+  integrate such a library, you have to tell the bulid system how to
+  find your header file.  Usually, your application is the one to use
+  the header file.
+
+  We'll use the following line to integrate libsample to the
+  application.
+
+  #+begin_src c
+    #include <libsample.h>
+  #+end_src
+
+  Just adding this line to your Zephyr application yeilds
+
+  #+begin_example
+    .../module-workspace/module-app/src/main.c:2:10: fatal error: libsample.h: No such file or directory
+	2 | #include <libsample.h>
+	  |          ^~~~~~~~~~~~~
+    compilation terminated.
+    ninja: build stopped: subcommand failed.
+  #+end_example
+
+  If you see the compilation with =-v= it's obvious that compiler
+  doesn't specify libsample's include directroy.
+
+  To tell include directory with CMake? It's
+  =target_include_directories=.  This function tells include
+  directries to the given target.  But we want to tell our application
+  the libsample include directroy.
+
+  We have to ways to do so.
+
+** zephyr_interface
+
+   One way to do so is to use =zephyr_interface=, a target Zephyr's
+   build system has. This target collects all compiler options the
+   build system needs.
+
+   #+begin_quote
+   "zephyr_interface" is a source-less library that encapsulates all
+   the global compiler options needed by all source files. All zephyr
+   libraries, including the library named "zephyr" link with this
+   library to obtain these flags.
+   #+end_quote
+
+   All you have to do is to add the following line in your library's
+   =zephyr/CMakeLists.txt=.
+
+   #+begin_src cmake
+     zephyr_include_directories(../include)
+   #+end_src
+
+   This does get job done. But if you check the build commands, you
+   will see that almost all the compilations gets the libsample's
+   include directory.
+
+   #+begin_example
+     -I.../module-workspace/modules/lib/sample/zephyr/../include
+   #+end_example
+
+   This is needed if Zephyr proper depends on your library, such as
+   CMSIS module because Zephyr will includes its header and link
+   against it.  But that's not our case.
+
+** ZEPHYR_INTERFACE_LIBS
+
+   Another way to specify is to use =ZEPHYR_INTERFACE_LIBS=. It has a
+   similar name with =zephyr_interface=, but these two are different.
+   In fact, =ZEPHYR_INTERFACE_LIBS= is only used by
+   =zephyr_interface_library_named()= as of this writing.  The macro
+   is defined in =zephyr/cmake/extensions.cmake=.
+
+   It'd be easier if we could use =zephyr_interface_library_named()=
+   in our libsample but if you do you get the following error:
+
+   #+begin_example
+     CMake Error at .../module-workspace/zephyr/cmake/extensions.cmake:619 (add_library):
+       add_library cannot create target "sample" because another target with the
+       same name already exists.  The existing target is a static library created
+       in source directory ".../module-workspace/modules/lib/sample".
+       See documentation for policy CMP0002 for more details.
+   #+end_example
+
+   It's obvious if you see how the macro is defined.
+
+   #+begin_src cmake
+     macro(zephyr_interface_library_named name)
+       add_library(${name} INTERFACE)
+       set_property(GLOBAL APPEND PROPERTY ZEPHYR_INTERFACE_LIBS ${name})
+     endmacro()
+   #+end_src
+
+   libsample already declare it as =sample= by calling
+   =add_library(sample)= in the top level =CMakeLists.txt= and you are
+   now trying to re-declare =sample= with this macro and CMake doesn't
+   like it.
+
+   If libsample is only for Zephyr, it's easier to just use this macro
+   in the top level =CMakeLists.txt= and done with it.  It's also
+   possible to do it with a separete branch, overwriting the top level
+   =CMakeLists.txt=.
+
+   But here we want to keep as much the original CMake build system
+   for libsample as possible and keep the Zephyr module construct in a
+   separate =zephyr/= directory.  So, we'll use
+   =ZEPHYR_INTERFACE_LIBS= directly.  Our =zephyr/CMakeLists.txt= will
+   become this:
+
+   #+begin_src cmake
+     add_subdirectory(.. build)
+     set_property(GLOBAL APPEND PROPERTY ZEPHYR_INTERFACE_LIBS sample)
+   #+end_src
+
+   We also need to change our =zephyr/Kconfig=:
+
+   #+begin_src kconfig
+     config APP_LINK_WITH_SAMPLE
+	     bool "Make libsample header file available to application"
+	     default y
+	     depends on LIBSAMPLE
+   #+end_src
+
+   We need this because the Zephyr build system has the following
+   check in =zephyr/cmake/app/boilerplate.cmake=:
+
+   #+begin_src cmake
+     target_link_libraries_ifdef(
+       CONFIG_APP_LINK_WITH_${boilerplate_lib_upper_case}
+       app
+       PUBLIC
+       ${boilerplate_lib}
+       )
+   #+end_src
+
+   This also explain why the name of the option is =APP_LINK_WITH_SAMPLE=.
+
+   You might ask "We are talking about include directories, why does it use
+   =target_link_libraries_ifdef=, which uses [[https://cmake.org/cmake/help/latest/command/target_link_libraries.html][=target_link_libraries=]], instead
+   of =target_include_directories_ifdef= or [[https://cmake.org/cmake/help/latest/command/target_include_directories.html][=target_include_directories=]]?"
+   With CMake, if a library already knows include directories for
+   applications, your application can just link against it with
+   =target_link_libraries()=.
+
+   You can learn about this in more detail in the [[https://cmake.org/cmake/help/latest/guide/tutorial/index.html][CMake Tutorial]], the [[https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20a%20Library.html][step 2]]
+   and [[https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Usage%20Requirements%20for%20a%20Library.html][step 3]] are the ones you should check.
+
+* ToDo
+
+ - [ ] Support autoconf.h
+ - [ ] Support -std=gnu11
+ - [ ] Support its own cflags
