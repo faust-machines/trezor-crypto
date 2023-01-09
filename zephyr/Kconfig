@@ -1,11 +1,11 @@
 # Copyright (c) 2023 Faust Network, Inc
 
-config LIB_TREZOR_CRYPTO
-	bool "Enable trezor-crypto"
+config LIBTREZOR
+	bool "Enable trezor"
 	help
-	  This option enables the trezor-crypto as a Zephyr module.
+	  This option enables the libtrezor as a Zephyr module.
 
-config APP_LINK_WITH_SAMPLE
-	bool "Make trezor-crypto header file available to application"
+config APP_LINK_WITH_TREZOR
+	bool "Make libtrezor header file available to application"
 	default y
-	depends on LIB_TREZOR_CRYPTO
+	depends on LIBTREZOR
