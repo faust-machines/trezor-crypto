@@ -5,42 +5,40 @@ add_library(trezor)
 target_compile_options(trezor PRIVATE -Wall -Wextra)
 set_target_properties(trezor PROPERTIES C_STANDARD 11)
 
-target_include_directories(trezor PUBLIC crypto)
-
 target_sources(trezor PRIVATE
-    crypto/address.c
-    crypto/base32.c
-    crypto/base58.c
-    crypto/bignum.c
-    crypto/bip32.c
-    crypto/bip39.c
-    crypto/bip39_english.c
-    crypto/blake2b.c
-    crypto/blake2s.c
-    crypto/blake256.c
-    crypto/cash_addr.c
-    crypto/chacha_drbg.c
-    crypto/curves.c
-    crypto/ecdsa.c
-    crypto/groestl.c
-    crypto/hasher.c
-    crypto/hmac_drbg.c
-    crypto/hmac.c
-    crypto/memzero.c
-    crypto/nem.c
-    crypto/nist256p1.c
-    crypto/pbkdf2.c
-    crypto/rand.c
-    crypto/rc4.c
-    crypto/rfc6979.c
-    crypto/ripemd160.c
-    crypto/script.c
-    crypto/secp256k1.c
-    crypto/segwit_addr.c
-    crypto/sha2.c
-    crypto/sha3.c
-    crypto/shamir.c
-    crypto/slip39.c
+    trezor/address.c
+    trezor/base32.c
+    trezor/base58.c
+    trezor/bignum.c
+    trezor/bip32.c
+    trezor/bip39.c
+    trezor/bip39_english.c
+    trezor/blake2b.c
+    trezor/blake2s.c
+    trezor/blake256.c
+    trezor/cash_addr.c
+    trezor/chacha_drbg.c
+    trezor/curves.c
+    trezor/ecdsa.c
+    trezor/groestl.c
+    trezor/hasher.c
+    trezor/hmac_drbg.c
+    trezor/hmac.c
+    trezor/memzero.c
+    trezor/nem.c
+    trezor/nist256p1.c
+    trezor/pbkdf2.c
+    trezor/rand.c
+    trezor/rc4.c
+    trezor/rfc6979.c
+    trezor/ripemd160.c
+    trezor/script.c
+    trezor/secp256k1.c
+    trezor/segwit_addr.c
+    trezor/sha2.c
+    trezor/sha3.c
+    trezor/shamir.c
+    trezor/slip39.c
 )
 
 file(CONFIGURE OUTPUT .gitignore
