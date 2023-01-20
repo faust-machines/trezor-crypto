@@ -1,11 +1,10 @@
-project(trezor)
-cmake_minimum_required(VERSION 3.20)
+if(CONFIG_LIBTREZOR)
+zephyr_interface_library_named(LIBTREZOR)
 
-add_library(trezor)
-target_compile_options(trezor PRIVATE -Wall -Wextra)
-set_target_properties(trezor PROPERTIES C_STANDARD 11)
+zephyr_include_directories(.)
 
-target_sources(trezor PRIVATE
+zephyr_library()
+zephyr_library_sources(
     trezor/address.c
     trezor/base32.c
     trezor/base58.c
@@ -41,6 +40,6 @@ target_sources(trezor PRIVATE
     trezor/slip39.c
 )
 
-file(CONFIGURE OUTPUT .gitignore
-  NEWLINE_STYLE UNIX
-  CONTENT "*")
+zephyr_library_link_libraries(LIBTREZOR)
+target_link_libraries(LIBTREZOR INTERFACE zephyr_interface)
+endif()

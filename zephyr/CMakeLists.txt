@@ -1,6 +1,0 @@
-if(CONFIG_LIBTREZOR)
-  add_subdirectory(.. build)
-  set_property(GLOBAL APPEND PROPERTY ZEPHYR_INTERFACE_LIBS trezor)
-  zephyr_include_directories(..)
-  #zephyr_interface_library_named(sample)
-endif()
